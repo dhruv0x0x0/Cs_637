@@ -13,6 +13,7 @@ if sys.version_info[0] == 2:
     import cPickle as pickle
 else:
     import pickle
+from torch.nn.utils.rnn import pad_sequence
 
 import torch
 import torch.utils.data as data
@@ -24,9 +25,23 @@ from scipy.ndimage import maximum_filter1d
 from scipy.ndimage import minimum_filter1d
 
 import matplotlib.pyplot as plt
-train_path = "/home/dhruv0x0x0/PycharmProjects/Cs637/Dataset/Straight"
-test_path2= "/home/dhruv0x0x0/PycharmProjects/Cs637/Dataset/Test.txt"
-test_path = "/home/dhruv0x0x0/PycharmProjects/Cs637/Dataset/curved_test"
+train_path = "./Cs637/Dataset/Straight"
+test_path2= "./Cs637/Dataset/Test.txt"
+test_path = "./Cs637/Dataset/curved_test"
+li= 55
+device= torch.device("cuda")
+def pd(sequence, target_length):
+    num_rows_to_pad = target_length - sequence.size(0)
+    padding_tensor = torch.tensor([0, 0, 0])
+    # Pad the sequence by appending the padding value
+    if num_rows_to_pad > 0:
+    #     sequence = torch.cat([sequence, torch.full((num_elements_to_pad,), padding_tensor, dtype=sequence.dtype)], dim=0)
+     padding_tensor = torch.full((num_rows_to_pad, sequence.size(1)), 0, dtype=sequence.dtype)
+
+    # Pad the 2D tensor by concatenating the padding tensor along dimension 0
+     sequence = torch.cat((sequence, padding_tensor), dim=0)
+
+    return sequence[:target_length]
 def dataloader():
     folders = os.listdir(train_path)
     train_files = []
@@ -60,7 +75,7 @@ class GAIT(data.Dataset):
 
     def __init__(self,
                  root_dir,
-                 win_len=16,
+                 win_len=256,
                  train=True,
                  cal=False,
                  in_dist_test=False,
@@ -90,11 +105,11 @@ class GAIT(data.Dataset):
                     #data = [float(item) for item in line.split()]
                     data = [float(num.strip()) for num in line.split(",")]
                     data = data[1:]  # excluding time data
-                    data = data #+ data + data + data
-                    if (len(data) == 3):
+                    data = data + data + data + data
+                    if (len(data) == 12):
                      cur_trace_data.append(data)
                 f.close()
-                if len(cur_trace_data) >=40:#>= self.win_total_datapoints:
+                if len(cur_trace_data) >=li:#>= self.win_total_datapoints:
                  self.traces.append(cur_trace_data)  # 3D
 
         elif self.cal:
@@ -111,13 +126,13 @@ class GAIT(data.Dataset):
                     #data = [float(item) for item in line.split()]
                     data = [float(num.strip()) for num in line.split(",")]
                     data = data[1:]  # excluding time data
-                    data = data #+ data + data + data
+                    data = data + data + data + data
                     #print("yoiii", len(data))
 
-                    if (len(data) == 3):
+                    if (len(data) == 12):
                      cur_trace_data.append(data)
                 f.close()
-                if len(cur_trace_data) >=40:#>= self.win_total_datapoints:
+                if len(cur_trace_data) >=li:#>= self.win_total_datapoints:
                  self.traces.append(cur_trace_data)  # 3D
 
         else:
@@ -136,11 +151,11 @@ class GAIT(data.Dataset):
                         #data = [float(item) for item in line.split()]
                         data = [float(num.strip()) for num in line.split(",")]
                         data = data[1:]  # excluding time data
-                        data = data #+ data + data + data
-                        if (len(data) == 3):
+                        data = data + data + data + data
+                        if (len(data) == 12):
                          cur_trace_data.append(data)
                     f.close()
-                    if len(cur_trace_data) >=40:#>= self.win_total_datapoints:
+                    if len(cur_trace_data) >=li:#>= self.win_total_datapoints:
                      self.traces.append(np.asarray(cur_trace_data))  # 3D
 
 
@@ -178,14 +193,14 @@ class GAIT(data.Dataset):
                             data = [float(num.strip()) for num in line.split(",")]
                             data = data[1:]  # excluding time data
 
-                            data = data #+ data + data + data
+                            data = data + data + data + data
 
-                            if(len(data)==3):
+                            if(len(data)==12):
 
                              cur_trace_data.append(data)
 
                  f.close()
-                 if len(cur_trace_data) >=40:#>= self.win_total_datapoints:
+                 if len(cur_trace_data) >=li:#>= self.win_total_datapoints:
                   self.traces.append(cur_trace_data)
 
                  # 3D
@@ -203,9 +218,9 @@ class GAIT(data.Dataset):
 
     def transform_win(self, win):  # win is a 2D list
 
-        trans_win = torch.FloatTensor(win)  # trans_win becomes a 2D tensor of win_len X 12 (sensor measurements for 1 time step)
-        trans_win = trans_win.unsqueeze(0)  # trans_win is now a 3D tensor. 1 (no. of channels for conv) X win_len X 12
-
+        trans_win = torch.Tensor(win)  # trans_win becomes a 2D tensor of win_len X 3 (sensor measurements for 1 time step)
+        #trans_win = trans_win.unsqueeze(0)  # trans_win is now a 3D tensor. 1 (no. of channels for conv) X win_len X 12
+        #print("trans_win shape", trans_win.shape)
         return trans_win
 
     def apply_filter_on_2D_data(self, input_data, filter_coeffs):  # input_data is 2D
@@ -296,35 +311,14 @@ class GAIT(data.Dataset):
         tracedata = self.traces[idx]  # tracedata = 2D list : time steps X data
 
         length = len(tracedata)
-        #print("check4",idx, length)# no. of time steps
-        #print(length, self.win_total_datapoints)
-        #win_start=0
-        if  length <= self.win_total_datapoints:
-             print(tracedata)
-        win_start = random.randint(0, length - self.win_total_datapoints)
 
-        orig_win = tracedata[win_start:win_start + self.win_total_datapoints]  # 2D list
-        trans_win = tracedata[win_start:win_start + self.win_total_datapoints]  # 2D list
 
+
+        orig_win = pd(torch.tensor(tracedata), self.win_total_datapoints)
+        trans_win = pd(torch.tensor(tracedata), self.win_total_datapoints)
         # random transformation selection with 0: 2x speed 1: shuffle, 2: reverse, 3: periodic (forward, backward), 4: Identity
         transform_id = random.randint(0, self.num_classes - 1)
 
-        # if self.tranformation_list[transform_id] == "speed": #  2x speed
-
-        #     win_start = random.randint(0, length - (2*self.win_total_datapoints)) # multiplying 2 for 2x speed
-
-        #     orig_win =  tracedata[win_start:win_start+self.win_total_datapoints]
-
-        #     trans_win = tracedata[win_start:win_start+2*self.win_total_datapoints:2]
-
-        # elif self.tranformation_list[transform_id] == "shuffle": # shuffle
-        #     random.shuffle(trans_win)
-
-        # elif self.tranformation_list[transform_id] == "reverse": # reverse
-        #     trans_win.reverse()
-
-        # elif self.tranformation_list[transform_id] == "periodic": # periodic (forward, backward)
-        #    trans_win[self.win_total_datapoints//2:self.win_total_datapoints] = reversed(trans_win[self.win_total_datapoints//2:self.win_total_datapoints])
 
         if self.tranformation_list[transform_id] == "low_pass":
             trans_win = self.apply_filter_on_2D_data(trans_win, [1 / 3, 1 / 3, 1 / 3])
@@ -354,18 +348,15 @@ class GAIT(data.Dataset):
 
         # converting to tensors and new dim = 1 (no. of channels for conv) X win_len X 12
         trans_win = self.transform_win(trans_win)
-
+        #print("trans",trans_win.shape)
         orig_win = self.transform_win(orig_win)
-        orig_win = orig_win[:, 1:-1, :]
+        orig_win = orig_win[1:-1, :]
 
         if self.tranformation_list[transform_id] == "identity" or self.tranformation_list[transform_id] == "dilation" or \
                 self.tranformation_list[transform_id] == "erosion":
-            trans_win = trans_win[:, 1:-1, :]
+            trans_win = trans_win[1:-1, :]
 
-        # if 'periodic' in self.tranformation_list:
-        #     trans_win = np.delete(trans_win, len(trans_win)//2)
-        #     orig_win = np.delete(orig_win, len(trans_win)//2)
-        #print("check5", np.asarray(orig_win).shape, np.asarray(trans_win).shape, np.asarray(transform_id).shape)
+
         return orig_win, trans_win, transform_id
 
     def __get_test_item__(self, idx):  # generator for getting sequential shuffled tuples/windows on test data
@@ -376,14 +367,15 @@ class GAIT(data.Dataset):
 
         # last_win_starting_point = max(length-(2*self.win_total_datapoints),1) # to get at least one datapoint from the trace if the trace is too short (total len = 2*win_total_datapoints)
 
-        for i in range(0, length - (1 * self.win_total_datapoints) + 1):
+        for i in range(1):
             win_start = i
 
             transform_id = random.randint(0, self.num_classes - 1)
 
-            orig_win = tracedata[win_start:win_start + self.win_total_datapoints]
-            trans_win = tracedata[win_start:win_start + self.win_total_datapoints]
-
+            # orig_win = tracedata[win_start:win_start + self.win_total_datapoints]
+            # trans_win = tracedata[win_start:win_start + self.win_total_datapoints]
+            orig_win = pd(torch.tensor(tracedata), self.win_total_datapoints)
+            trans_win = pd(torch.tensor(tracedata), self.win_total_datapoints)
             # if self.tranformation_list[transform_id] == "speed":
 
             #     # trans_win = []
@@ -435,15 +427,15 @@ class GAIT(data.Dataset):
             else:
                 raise Exception("Invalid transformation")
 
-            # converting to tensors and new dim = 1 (no. of channels for conv) X win_len X 12
+            # converting to tensors and new dim = 1 (no. of channels for conv) X win_len X 12\
+
             trans_win = self.transform_win(trans_win)
 
             orig_win = self.transform_win(orig_win)
-            orig_win = orig_win[:, 1:-1, :]
+            orig_win = orig_win[1:-1, :]
 
-            if self.tranformation_list[transform_id] == "identity" or self.tranformation_list[
-                transform_id] == "dilation" or self.tranformation_list[transform_id] == "erosion":
-                trans_win = trans_win[:, 1:-1, :]
+            if self.tranformation_list[transform_id] == "identity" or self.tranformation_list[transform_id] == "dilation" or self.tranformation_list[transform_id] == "erosion":
+                trans_win = trans_win[1:-1, :]
 
             # if 'periodic' in self.tranformation_list:
             #     trans_win = np.delete(trans_win, len(trans_win)//2)
