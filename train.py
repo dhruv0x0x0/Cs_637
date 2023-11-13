@@ -34,15 +34,14 @@ def train(args, model, criterion, optimizer, device, train_dataloader, writer, e
         # get inputs
         # pdb.set_trace()
         orig_data_wins, transformed_data_wins, transformation = data
-        #print("check7", np.asarray(orig_data_wins).shape,np.asarray(transformation).shape )
-        # print(torch.mean(torch.abs(orig_data_wins)), torch.mean(torch.abs(transformed_data_wins)))
         orig_data_wins = orig_data_wins.to(device)
         transformed_data_wins = transformed_data_wins.to(device)
         target_transformations = torch.tensor(transformation).to(device)
-        #print(target_transformations)
+
         # zero the parameter gradients
         optimizer.zero_grad()
         # forward and backward
+        #print(orig_data_wins.shape)
         outputs = model(orig_data_wins, transformed_data_wins)  # return logits here
         loss = criterion(outputs, target_transformations)
         # print("Outputs: {}, targets: {}, loss: {}".format(outputs, target_transformations, loss.item()))
@@ -126,19 +125,19 @@ from distutils.util import strtobool
 def parse_args():
     parser = argparse.ArgumentParser(description='Video Win Order Prediction')
     parser.add_argument('--mode', type=str, default='train', help='train/test')
-    parser.add_argument('--wl', type=int, default=16, help='win length')
+    parser.add_argument('--wl', type=int, default=256, help='win length')
     parser.add_argument('--gpu', type=int, default=0, help='GPU id')
     parser.add_argument('--lr', type=float, default=1e-5, help='learning rate')
     parser.add_argument('--wgtDecay', default=5e-4, type=float)
     parser.add_argument('--lrMul', type=float, default=10.)
     parser.add_argument('--momentum', type=float, default=9e-1, help='momentum')
     parser.add_argument('--wd', type=float, default=5e-4, help='weight decay')
-    parser.add_argument('--log', type=str, default='/home/dhruv0x0x0/PycharmProjects/Cs637', help='log directory')
+    parser.add_argument('--log', type=str, default='./Cs637', help='log directory')
     parser.add_argument('--ckpt', type=str, default='', help='checkpoint path')
     parser.add_argument('--desp', type=str, help='additional description')
-    parser.add_argument('--epochs', type=int, default=300, help='number of total epochs to run')
+    parser.add_argument('--epochs', type=int, default=400, help='number of total epochs to run')
     parser.add_argument('--start-epoch', type=int, default=1, help='manual epoch number (useful on restarts)')
-    parser.add_argument('--bs', type=int, default=3, help='mini-batch size')
+    parser.add_argument('--bs', type=int, default=5, help='mini-batch size')
     parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
     parser.add_argument('--pf', type=int, default=100, help='print frequency every batch')
     parser.add_argument('--seed', type=int, default=100, help='seed for initializing training.')
